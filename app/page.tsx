@@ -99,7 +99,7 @@ export default function Home() {
           </div>
 
           <a 
-            href="https://t.me/" 
+            href="https://t.me/lybra_leads_bot" 
             target="_blank" 
             rel="noopener noreferrer"
             className="group relative inline-flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl transition-all shadow-md shadow-cyan-500/20 hover:shadow-cyan-500/35 active:scale-95"
@@ -131,7 +131,7 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a 
-              href="https://t.me/" 
+              href="https://t.me/lybra_leads_bot" 
               target="_blank" 
               rel="noopener noreferrer"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-sm px-8 py-4 rounded-xl transition-all shadow-xl shadow-cyan-500/25 hover:scale-[1.02] active:scale-95"
@@ -269,7 +269,7 @@ export default function Home() {
                   <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
                     <span className="text-[11px] text-slate-500 font-mono">{lead.source}</span>
                     <a 
-                      href="https://t.me/" 
+                      href="https://t.me/lybra_leads_bot" 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 text-xs font-bold text-cyan-400 group-hover:text-cyan-300 transition-colors"
@@ -310,7 +310,7 @@ export default function Home() {
                 </ul>
               </div>
               <a 
-                href="https://t.me/" 
+                href="https://t.me/lybra_leads_bot" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="w-full text-center bg-slate-800 hover:bg-slate-700 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors"
@@ -341,7 +341,7 @@ export default function Home() {
                 </ul>
               </div>
               <a 
-                href="https://t.me/" 
+                href="https://t.me/lybra_leads_bot" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="w-full text-center bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20"
