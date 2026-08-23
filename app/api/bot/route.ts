@@ -7,56 +7,130 @@ const BOT_TOKEN = '8748079496:AAF2IthIKEspDnPdjtLspw8v3yf9fKD87bQ';
 const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: any) {
-  await fetch(`${TG_API}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'HTML', reply_markup: replyMarkup }),
-  });
+  try {
+    await fetch(`${TG_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup: replyMarkup,
+      }),
+    });
+  } catch (err) {
+    console.error('Send error:', err);
+  }
 }
 
 export async function POST(req: Request) {
   try {
     const update = await req.json();
-    let user = null;
-    let chatId = null;
-    let text = '';
 
     if (update.message) {
-      user = update.message.from;
-      chatId = update.message.chat.id;
-      text = update.message.text || '';
-    } else if (update.callback_query) {
-      user = update.callback_query.from;
-      chatId = update.callback_query.message.chat.id;
-      text = update.callback_query.data;
+      const user = update.message.from;
+      const chat = update.message.chat;
+      const text = update.message.text || '';
+
+      // Сохраняем пользователя в Supabase
+      if (user) {
+        await supabase.from('users').upsert(
+          {
+            id: user.id,
+            first_name: user.first_name || '',
+            username: user.username || '',
+            is_subscribed: true
+          },
+          { onConflict: 'id' }
+        );
+      }
+
+      if (text.startsWith('/start')) {
+        const welcomeText =
+          `👋 Привет, <b>${user?.first_name || 'друг'}</b>!\n\n` +
+          `⚡ <b>Lybra Leads AI</b> — радар горячих B2B заказов.\n` +
+          `Мы мониторим 300+ бирж и TG-чатов, отсекаем спам и находим прямых заказчиков с бюджетами.\n\n` +
+          `👇 Нажмите <b>🔥 Свежие заказы</b> или выберите категорию:`;
+
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: '🔥 Получить свежие заказы', callback_data: 'fetch_latest' }],
+            [
+              { text: '💻 Разработка', callback_data: 'cat_dev' },
+              { text: '🎨 Дизайн', callback_data: 'cat_design' }
+            ],
+            [
+              { text: '📢 Маркетинг', callback_data: 'cat_marketing' },
+              { text: '🌐 Все категории', callback_data: 'cat_all' }
+            ],
+            [{ text: '🌐 Открыть сайт', url: 'https://lybra-leads-web.vercel.app' }]
+          ]
+        };
+
+        await sendTelegramMessage(chat.id, welcomeText, keyboard);
+      }
     }
 
-    if (!user || !chatId) return NextResponse.json({ ok: true });
+    if (update.callback_query) {
+      const chatId = update.callback_query.message.chat.id;
+      const user = update.callback_query.from;
+      const data = update.callback_query.data;
 
-    // Пробуем записать в БД при любом действии
-    const { error: dbError } = await supabase.from('users').upsert({
-      id: user.id,
-      first_name: user.first_name || '',
-      username: user.username || '',
-      is_subscribed: true
-    }, { onConflict: 'id' });
+      if (data.startsWith('cat_')) {
+        const cat = data.replace('cat_', '');
+        await supabase.from('users').upsert(
+          {
+            id: user.id,
+            first_name: user.first_name || '',
+            username: user.username || '',
+            category: cat,
+            is_subscribed: true
+          },
+          { onConflict: 'id' }
+        );
 
-    // Если есть ошибка БД — отправляем её прямо в бота!
-    if (dbError) {
-      await sendTelegramMessage(chatId, `🚨 <b>Ошибка Supabase:</b> <code>${dbError.message}</code>`);
-    }
+        const catNames: Record<string, string> = {
+          dev: '💻 Разработка',
+          design: '🎨 Дизайн',
+          marketing: '📢 Маркетинг',
+          all: '🌐 Все категории'
+        };
 
-    if (text.startsWith('/start')) {
-      const msg = `👋 Привет, <b>${user.first_name}</b>!\n` +
-                  (dbError ? `❌ В базу не записан!` : `✅ Твой профиль (ID: ${user.id}) успешно сохранен в базу!`);
-      await sendTelegramMessage(chatId, msg);
-    } else if (text.startsWith('cat_')) {
-      await supabase.from('users').update({ category: text.replace('cat_', '') }).eq('id', user.id);
-      await sendTelegramMessage(chatId, `✅ Категория обновлена!`);
+        await sendTelegramMessage(
+          chatId,
+          `✅ Подписка обновлена: <b>${catNames[cat]}</b>\nНовые заказы будут приходить по этой категории.`
+        );
+      } else if (data === 'fetch_latest') {
+        await sendTelegramMessage(chatId, '🔍 <i>Сканирую биржи и отбираю актуальные лиды...</i>');
+
+        const host = req.headers.get('host') || 'lybra-leads-web.vercel.app';
+        const protocol = host.includes('localhost') ? 'http' : 'https';
+        const res = await fetch(`${protocol}://${host}/api/leads/feed`);
+        const dataJson = await res.json();
+
+        if (dataJson.success && dataJson.leads?.length > 0) {
+          const topLeads = dataJson.leads.slice(0, 3);
+          for (const lead of topLeads) {
+            const leadMsg =
+              `💼 <b>${lead.title}</b>\n\n` +
+              `💰 <b>Бюджет:</b> ${lead.budget}\n` +
+              `🏷 <b>Теги:</b> ${lead.tags.join(' ')}\n` +
+              `📍 <b>Источник:</b> ${lead.source}\n\n` +
+              `📝 <i>${lead.snippet}</i>`;
+
+            const leadKeyboard = {
+              inline_keyboard: [[{ text: '🔗 Откликнуться на заказ', url: lead.link }]]
+            };
+
+            await sendTelegramMessage(chatId, leadMsg, leadKeyboard);
+          }
+        }
+      }
     }
 
     return NextResponse.json({ ok: true });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Webhook Error:', error);
     return NextResponse.json({ ok: false }, { status: 500 });
   }
