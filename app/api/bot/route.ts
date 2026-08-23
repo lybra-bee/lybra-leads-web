@@ -11,6 +11,7 @@ async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: a
       chat_id: chatId,
       text: text,
       parse_mode: 'HTML',
+      disable_web_page_preview: true,
       reply_markup: replyMarkup,
     }),
   });
@@ -20,7 +21,6 @@ export async function POST(req: Request) {
   try {
     const update = await req.json();
 
-    // Обработка обычных сообщений
     if (update.message) {
       const chatId = update.message.chat.id;
       const text = update.message.text || '';
@@ -30,21 +30,23 @@ export async function POST(req: Request) {
         const welcomeText = 
           `👋 Привет, <b>${firstName}</b>!\n\n` +
           `⚡ <b>Lybra Leads AI</b> — радар горячих B2B заказов.\n` +
-          `Мы мониторим 300+ бирж и TG-чатов, отсекаем спам и присылаем прямых заказчиков с бюджетами.\n\n` +
-          `🎯 <b>Выберите категории заказов для получения:</b>`;
+          `Мы мониторим 300+ бирж и TG-чатов, отсекаем спам и находим прямых заказчиков.\n\n` +
+          `👇 Нажмите <b>🔥 Свежие заказы</b> или выберите категорию:`;
 
         const keyboard = {
           inline_keyboard: [
             [
-              { text: '💻 Разработка (Dev)', callback_data: 'cat_dev' },
-              { text: '🎨 Дизайн (UI/UX)', callback_data: 'cat_design' }
+              { text: '🔥 Получить свежие заказы', callback_data: 'fetch_latest' }
             ],
             [
-              { text: '📢 Маркетинг / Трафик', callback_data: 'cat_marketing' },
-              { text: '🔥 Все заказы', callback_data: 'cat_all' }
+              { text: '💻 Разработка', callback_data: 'cat_dev' },
+              { text: '🎨 Дизайн', callback_data: 'cat_design' }
             ],
             [
-              { text: '🌐 Открыть радар на сайте', url: 'https://lybra-leads-web.vercel.app' }
+              { text: '📢 Маркетинг', callback_data: 'cat_marketing' }
+            ],
+            [
+              { text: '🌐 Открыть сайт', url: 'https://lybra-leads-web.vercel.app' }
             ]
           ]
         };
@@ -53,24 +55,44 @@ export async function POST(req: Request) {
       }
     }
 
-    // Обработка нажатий на инлайн-кнопки
     if (update.callback_query) {
       const chatId = update.callback_query.message.chat.id;
       const data = update.callback_query.data;
-      
-      const catNames: Record<string, string> = {
-        cat_dev: '💻 Разработка',
-        cat_design: '🎨 Дизайн',
-        cat_marketing: '📢 Маркетинг',
-        cat_all: '🔥 Все категории'
-      };
 
-      const selected = catNames[data] || 'Выбранная категория';
-      const msg = 
-        `✅ Подписка активирована: <b>${selected}</b>\n\n` +
-        `📡 <b>Радар запущен.</b> Как только AI отберет горячий заказ без спама, вы получите уведомление первыми.`;
+      if (data === 'fetch_latest' || data.startsWith('cat_')) {
+        await sendTelegramMessage(chatId, '🔍 <i>Сканирую биржи и отбираю актуальные лиды...</i>');
 
-      await sendTelegramMessage(chatId, msg);
+        // Вызываем наш парсер внутри приложения
+        const host = req.headers.get('host') || 'lybra-leads-web.vercel.app';
+        const protocol = host.includes('localhost') ? 'http' : 'https';
+        const res = await fetch(`${protocol}://${host}/api/leads/feed`);
+        const dataJson = await res.json();
+
+        if (dataJson.success && dataJson.leads.length > 0) {
+          const topLeads = dataJson.leads.slice(0, 3); // Показываем 3 самых свежих
+
+          for (const lead of topLeads) {
+            const leadMsg = 
+              `💼 <b>${lead.title}</b>\n\n` +
+              `💰 <b>Бюджет:</b> ${lead.budget}\n` +
+              `🏷 <b>Теги:</b> ${lead.tags.join(' ')}\n` +
+              `📍 <b>Источник:</b> ${lead.source}\n\n` +
+              `📝 <i>${lead.snippet}</i>`;
+
+            const leadKeyboard = {
+              inline_keyboard: [
+                [
+                  { text: '🔗 Откликнуться на заказ', url: lead.link }
+                ]
+              ]
+            };
+
+            await sendTelegramMessage(chatId, leadMsg, leadKeyboard);
+          }
+        } else {
+          await sendTelegramMessage(chatId, 'Пока нет новых заказов, попробуйте через пару минут.');
+        }
+      }
     }
 
     return NextResponse.json({ ok: true });
